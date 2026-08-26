@@ -11,6 +11,8 @@ from safetensors.torch import load_file
 import folder_paths
 import comfy.model_management
 
+from AILab_utils import get_device_type, get_amp_dtype
+
 from hydra import initialize_config_dir
 from hydra.core.global_hydra import GlobalHydra
 
@@ -198,10 +200,8 @@ class SAM2Segment:
             device_obj = comfy.model_management.get_torch_device()
             
             # Determine precision based on device preference
-            if device == "Auto":
-                precision = "fp16" if hasattr(device_obj, 'type') and device_obj.type == 'cuda' else "fp32"
-            elif device == "GPU":
-                precision = "fp16" if hasattr(device_obj, 'type') and device_obj.type == 'cuda' else "fp32"
+            if device in ("Auto", "GPU") and get_device_type(device_obj) in ("cuda", "xpu"):
+                precision = "fp16"
             else:  # CPU
                 precision = "fp32"
             
@@ -238,6 +238,8 @@ class SAM2Segment:
             
             # Apply precision to model
             dtype = {"fp16": torch.float16, "fp32": torch.float32}[precision]
+            if get_device_type(device_obj) == "xpu":
+                dtype = torch.bfloat16
             sam_model.load_state_dict(state_dict, strict=False)
             sam_model = sam_model.to(dtype).to(sam_device).eval()
             
@@ -330,15 +332,14 @@ class SAM2Segment:
             # Set image and predict with autocast for precision handling
             from contextlib import nullcontext
             # Determine precision based on device preference
-            if device == "Auto":
-                precision = "fp16" if hasattr(device_obj, 'type') and device_obj.type == 'cuda' else "fp32"
-            elif device == "GPU":
-                precision = "fp16" if hasattr(device_obj, 'type') and device_obj.type == 'cuda' else "fp32"
+            if device in ("Auto", "GPU") and get_device_type(device_obj) in ("cuda", "xpu"):
+                precision = "fp16"
             else:  # CPU
                 precision = "fp32"
                 
             autocast_condition = not comfy.model_management.is_device_mps(device_obj)
-            with torch.autocast(comfy.model_management.get_autocast_device(device_obj), dtype=torch.float16 if precision == "fp16" else torch.float32) if autocast_condition else nullcontext():
+            amp_dtype = get_amp_dtype(device_obj) if precision == "fp16" else torch.float32
+            with torch.autocast(comfy.model_management.get_autocast_device(device_obj), dtype=amp_dtype) if autocast_condition else nullcontext():
                 predictor.set_image(img_pil)
                 
                 # Process each box individually and combine masks

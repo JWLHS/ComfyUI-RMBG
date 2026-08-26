@@ -62,6 +62,7 @@ erosion_kernels = [None] + [cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (size, 
 def get_unknown_tensor_from_pred(pred, rand_width=30, train_mode=True):
     ### pred: N, 1 ,H, W
     N, C, H, W = pred.shape
+    device = pred.device
 
     pred = pred.data.cpu().numpy()
     uncertain_area = np.ones_like(pred, dtype=np.uint8)
@@ -79,5 +80,5 @@ def get_unknown_tensor_from_pred(pred, rand_width=30, train_mode=True):
 
     weight = np.zeros_like(uncertain_area)
     weight[uncertain_area == 1] = 1
-    weight = torch.from_numpy(weight).float().cuda()
+    weight = torch.from_numpy(weight).float().to(device)
     return weight

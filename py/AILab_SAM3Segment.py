@@ -11,6 +11,7 @@ from torch.hub import download_url_to_file
 import folder_paths
 import comfy.model_management
 
+from AILab_utils import device_str, is_accelerator, empty_cache
 from AILab_ImageMaskTools import pil2tensor, tensor2pil
 
 CURRENT_DIR = Path(__file__).resolve().parent
@@ -98,9 +99,9 @@ def _resolve_device(user_choice):
     if user_choice == "CPU":
         return torch.device("cpu")
     if user_choice == "GPU":
-        if auto_device.type != "cuda":
-            raise RuntimeError("GPU unavailable")
-        return torch.device("cuda")
+        if not is_accelerator(auto_device):
+            raise RuntimeError("GPU (CUDA/XPU) unavailable")
+        return auto_device
     return auto_device
 
 
@@ -141,21 +142,21 @@ class SAM3Segment:
 
     def _load_processor(self, device_choice):
         torch_device = _resolve_device(device_choice)
-        device_str = "cuda" if torch_device.type == "cuda" else "cpu"
-        cache_key = ("sam3", device_str)
+        device_name = device_str(torch_device)
+        cache_key = ("sam3", device_name)
         if cache_key not in self.processor_cache:
             model_info = SAM3_MODELS["sam3"]
             ckpt_path = get_or_download_model_file(model_info["filename"], model_info["model_url"])
             model = build_sam3_image_model(
                 bpe_path=SAM3_BPE_PATH,
-                device=device_str,
+                device=device_name,
                 eval_mode=True,
                 checkpoint_path=ckpt_path,
                 load_from_HF=False,
                 enable_segmentation=True,
                 enable_inst_interactivity=False,
             )
-            processor = Sam3Processor(model, device=device_str)
+            processor = Sam3Processor(model, device=device_name)
             self.processor_cache[cache_key] = processor
         return self.processor_cache[cache_key], torch_device
 
@@ -260,7 +261,7 @@ class SAM3Segment:
             image = image.unsqueeze(0)
         processor, torch_device = self._load_processor(device)
         autocast_device = comfy.model_management.get_autocast_device(torch_device)
-        autocast_enabled = torch_device.type == "cuda" and not comfy.model_management.is_device_mps(torch_device)
+        autocast_enabled = is_accelerator(torch_device) and not comfy.model_management.is_device_mps(torch_device)
         ctx = torch.autocast(autocast_device, dtype=torch.bfloat16) if autocast_enabled else nullcontext()
         result_images, result_masks, result_mask_images = [], [], []
         with ctx:
@@ -303,12 +304,11 @@ class SAM3Segment:
                     result_mask_images.append(mask_rgb)
 
         if unload_model:
-            device_str = "cuda" if torch_device.type == "cuda" else "cpu"
-            cache_key = ("sam3", device_str)
+            device_name = device_str(torch_device)
+            cache_key = ("sam3", device_name)
             if cache_key in self.processor_cache:
                 del self.processor_cache[cache_key]
-            if torch_device.type == "cuda":
-                torch.cuda.empty_cache()
+            empty_cache(torch_device)
 
         # return torch.cat(result_images, dim=0), torch.cat(result_masks, dim=0), torch.cat(result_mask_images, dim=0)
         # Handle empty results

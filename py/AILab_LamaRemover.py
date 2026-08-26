@@ -16,6 +16,7 @@ import numpy as np
 from PIL import Image, ImageOps, ImageFilter
 import folder_paths
 from comfy.model_management import get_torch_device
+from AILab_utils import empty_cache
 from torchvision import transforms
 from huggingface_hub import hf_hub_download
 import shutil
@@ -93,7 +94,7 @@ class AILab_LamaRemover:
             self.model = torch.jit.load(self.model_path, map_location=self.device)
         except Exception as e:
             print(f"Can't use comfy device: {str(e)}")
-            self.device = "cuda" if torch.cuda.is_available() else "cpu"
+            self.device = get_torch_device()
             self.model = torch.jit.load(self.model_path, map_location=self.device)
         
         self.model.eval()
@@ -128,8 +129,7 @@ class AILab_LamaRemover:
             
             del img_tensor
             del mask_tensor
-            if torch.cuda.is_available():
-                torch.cuda.empty_cache()
+            empty_cache()
                 
             return result_cpu
 
@@ -179,8 +179,7 @@ class AILab_LamaRemover:
             print(traceback.format_exc())
             raise RuntimeError(f"Error in object removal: {str(e)}")
         finally:
-            if torch.cuda.is_available():
-                torch.cuda.empty_cache()
+            empty_cache()
 
 NODE_CLASS_MAPPINGS = {
     "AILab_LamaRemover": AILab_LamaRemover,

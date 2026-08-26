@@ -23,7 +23,7 @@ import importlib.util
 from safetensors.torch import load_file
 import cv2
 
-from AILab_utils import get_device
+from AILab_utils import get_device, get_amp_dtype, empty_cache
 device = get_device()
 
 # Add model path
@@ -302,7 +302,7 @@ class BiRefNetModel:
             del self.model
             self.model = None
             self.current_model_version = None
-            torch.cuda.empty_cache()
+            empty_cache()
             print("Model cleared from memory")
 
     def load_model(self, model_name):
@@ -343,7 +343,7 @@ class BiRefNetModel:
                 self.model.load_state_dict(state_dict)
                 
                 self.model.eval()
-                self.model.half()
+                self.model.to(get_amp_dtype())
                 torch.set_float32_matmul_precision('high')
                 self.model.to(device)
                 self.current_model_version = model_name
@@ -363,7 +363,7 @@ class BiRefNetModel:
             orig_image = tensor2pil(image)
             w, h = orig_image.size
             
-            input_tensor = transform_image(orig_image).unsqueeze(0).to(device).half()
+            input_tensor = transform_image(orig_image).unsqueeze(0).to(device).to(get_amp_dtype())
             
             with torch.no_grad():
                 preds = self.model(input_tensor)

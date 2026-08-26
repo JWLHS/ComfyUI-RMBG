@@ -42,7 +42,7 @@ def RGB2RGBA(image: Image.Image, mask: Union[Image.Image, torch.Tensor]) -> Imag
         mask = mask.resize(image.size, Image.Resampling.LANCZOS)
     return Image.merge('RGBA', (*image.convert('RGB').split(), mask.convert('L')))
 
-from AILab_utils import get_device
+from AILab_utils import get_device, empty_cache
 device = get_device()
 
 folder_paths.add_model_folder_path("rmbg", os.path.join(folder_paths.models_dir, "RMBG"))
@@ -114,7 +114,7 @@ class FaceSegment:
             del self.model
             self.model = None
             self.processor = None
-            torch.cuda.empty_cache()
+            empty_cache()
 
     def download_model_files(self):
         model_id = AVAILABLE_MODELS["face_parsing"]

@@ -24,6 +24,8 @@ import torch.nn.functional as F
 import numpy as np
 from PIL import Image, ImageFilter
 from torch.hub import download_url_to_file
+
+from AILab_utils import get_device_type, get_amp_dtype, is_accelerator, empty_cache
 from torchvision import transforms
 from torchvision.transforms import InterpolationMode
 
@@ -247,8 +249,7 @@ class AILab_SDMatte:
                     del self.model_cache[key]
             import gc
             gc.collect()
-            if torch.cuda.is_available():
-                torch.cuda.empty_cache()
+            empty_cache()
         
         if cache_key not in self.model_cache:
             if not DIFFUSERS_AVAILABLE:
@@ -289,8 +290,8 @@ class AILab_SDMatte:
             if device == "CPU":
                 device_obj = torch.device('cpu')
             elif device == "GPU":
-                if not torch.cuda.is_available():
-                    print("SDMatte: GPU requested but CUDA not available, falling back to CPU")
+                if not is_accelerator(device_obj):
+                    print("SDMatte: GPU requested but CUDA/XPU not available, falling back to CPU")
                     device_obj = torch.device('cpu')
                 else:
                     device_obj = comfy.model_management.get_torch_device()
@@ -298,7 +299,7 @@ class AILab_SDMatte:
             sdmatte_model.eval()
             sdmatte_model.to(device_obj)
         
-            if device_obj.type == 'cuda':
+            if is_accelerator(device_obj):
                 self._apply_memory_optimizations(sdmatte_model)
         
             self.model_cache[cache_key] = sdmatte_model
@@ -320,7 +321,7 @@ class AILab_SDMatte:
 
     def _apply_memory_optimizations(self, model):
         try:
-            torch.cuda.empty_cache()
+            empty_cache()
         except Exception:
             pass
 
@@ -374,8 +375,8 @@ class AILab_SDMatte:
                     "trimap_coords": torch.tensor([[0,0,1,1]], dtype=tri.dtype, device=device_obj)}
         
             with torch.inference_mode():
-                if device_obj.type == 'cuda':
-                    with torch.autocast(device_type='cuda', dtype=torch.float16):
+                if is_accelerator(device_obj):
+                    with torch.autocast(device_type=device_obj.type, dtype=get_amp_dtype(device_obj)):
                         pred_alpha = sdmatte_model(data)
                 else:
                     pred_alpha = sdmatte_model(data)
@@ -403,8 +404,8 @@ class AILab_SDMatte:
             result_images.append(pil2tensor(result_image))
             result_mask_images.append(mask_image_vis)
         
-        if device_obj.type == 'cuda':
-            torch.cuda.empty_cache()
+        if is_accelerator(device_obj):
+            empty_cache()
         import gc
         gc.collect()
         

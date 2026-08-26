@@ -15,7 +15,7 @@ os.makedirs(YOLO_LEGACY_DIR, exist_ok=True)
 folder_paths.add_model_folder_path("ultralytics", ULTRALYTICS_DIR, is_default=True)
 folder_paths.add_model_folder_path("ultralytics", YOLO_LEGACY_DIR)
 
-DEVICE_CHOICES = ("auto", "cuda", "cpu", "mps")
+DEVICE_CHOICES = ("auto", "xpu", "cuda", "cpu", "mps")
 MASK_COUNT_CHOICES = ("all", "1", "2", "3", "4", "5", "6", "7", "8", "9", "10")
 MASK_INDEX_CHOICES = ("none", "1", "2", "3", "4", "5", "6", "7", "8", "9", "10")
 
@@ -61,6 +61,8 @@ class AILab_YoloV8Adv:
     def _resolve_device(self, requested: str) -> str:
         if requested != "auto":
             return requested
+        if hasattr(torch, "xpu") and torch.xpu.is_available():
+            return "xpu"
         if torch.cuda.is_available():
             return "cuda"
         if hasattr(torch.backends, "mps") and torch.backends.mps.is_available():

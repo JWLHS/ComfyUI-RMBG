@@ -38,7 +38,7 @@ def mask2image(mask: torch.Tensor) -> Image.Image:
         mask = mask.unsqueeze(0)
     return tensor2pil(mask)
 
-from AILab_utils import get_device
+from AILab_utils import get_device, empty_cache
 device = get_device()
 
 folder_paths.add_model_folder_path("rmbg", os.path.join(folder_paths.models_dir, "RMBG"))
@@ -207,7 +207,7 @@ class FashionSegmentClothing:
             del self.model
             self.model = None
             self.processor = None
-            torch.cuda.empty_cache()
+            empty_cache()
 
     def download_model_files(self):
         model_id = AVAILABLE_MODELS["segformer_fashion"]

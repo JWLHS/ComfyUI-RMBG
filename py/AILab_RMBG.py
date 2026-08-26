@@ -31,7 +31,7 @@ from transformers import AutoModelForImageSegmentation
 import cv2
 import types
 
-from AILab_utils import get_device
+from AILab_utils import get_device, empty_cache
 device = get_device()
 
 folder_paths.add_model_folder_path("rmbg", os.path.join(folder_paths.models_dir, "RMBG"))
@@ -149,8 +149,7 @@ class BaseModelLoader:
 
             import gc
             gc.collect()
-            if torch.cuda.is_available():
-                torch.cuda.empty_cache()
+            empty_cache()
         self.model = None
         self.current_model_version = None
 

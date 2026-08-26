@@ -114,7 +114,8 @@ class SDMatte(nn.Module):
 
 
     def forward(self, data):
-        rgb = data["image"].cuda()
+        device = data["image"].device
+        rgb = data["image"].to(device)
         B = rgb.shape[0]
 
         if self.aux_input is None and self.training:
@@ -126,7 +127,7 @@ class SDMatte(nn.Module):
 
         # get aux input latent
         if self.use_aux_input:
-            aux_input = data[aux_input_type].cuda()
+            aux_input = data[aux_input_type].to(device)
             aux_input = aux_input.repeat(1, 3, 1, 1)
             aux_input_h = self.vae.encoder(aux_input.to(rgb.dtype))
             aux_input_moments = self.vae.quant_conv(aux_input_h)
@@ -137,7 +138,7 @@ class SDMatte(nn.Module):
 
         # get aux coordinate
         coor_name = AUX_INPUT_DIT[aux_input_type]
-        coor = data[coor_name].cuda()
+        coor = data[coor_name].to(device)
         if coor_name == "point_coords":
             N = coor.shape[1]
             for i in range(N, 1680):
@@ -167,12 +168,12 @@ class SDMatte(nn.Module):
             if self.use_coor_input:
                 added_cond_kwargs = {"bbox_mask_coords": coor}
             else:
-                coor = torch.tensor([[0, 0, 1, 1]] * B).cuda()
+                coor = torch.tensor([[0, 0, 1, 1]] * B, device=device)
                 added_cond_kwargs = {"bbox_mask_coords": coor}
 
         # get attention mask
         if self.use_attention_mask and aux_input_type in self.attn_mask_aux_input:
-            attention_mask = data[aux_input_type].cuda()
+            attention_mask = data[aux_input_type].to(device)
             attention_mask = (attention_mask + 1) / 2
             attention_mask = F.interpolate(attention_mask, scale_factor=1 / 8, mode="nearest")
             attention_mask = attention_mask.flatten(start_dim=1)
@@ -203,16 +204,16 @@ class SDMatte(nn.Module):
             truncation=True,
             return_tensors="pt",
         )
-        text_input_ids = text_inputs.input_ids.to("cuda")
+        text_input_ids = text_inputs.input_ids.to(device)
         text_embed = self.text_encoder(text_input_ids)[0]
         encoder_hidden_states_2 = text_embed
 
         # get class_label
-        is_trans = data["is_trans"].cuda()
+        is_trans = data["is_trans"].to(device)
         trans = 1 - is_trans
 
         # get timesteps
-        timestep = torch.tensor([1], device="cuda").long()
+        timestep = torch.tensor([1], device=device).long()
 
         # unet
         unet_input = torch.cat([rgb_latent, aux_input_latent], dim=1)

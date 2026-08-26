@@ -1,4 +1,5 @@
 # Shared utility helpers
+import gc
 import numpy as np
 import torch
 from PIL import Image
@@ -14,6 +15,40 @@ def get_device():
     Apple Silicon (MPS). See issues #200 and #135.
     """
     return mm.get_torch_device()
+
+
+def get_device_type(device=None):
+    """Return the backend type string ('xpu', 'cuda', 'mps', 'cpu', ...)."""
+    return (device if device is not None else get_device()).type
+
+
+def device_str(device=None):
+    """Short device string used for cache keys / model builders."""
+    return get_device_type(device)
+
+
+def is_accelerator(device=None):
+    """True when the device is a GPU backend (CUDA or Intel XPU)."""
+    return get_device_type(device) in ("cuda", "xpu")
+
+
+def get_amp_dtype(device=None):
+    """Autocast/amp dtype for the active device (bf16 on XPU, fp16 on CUDA)."""
+    if get_device_type(device) == "xpu":
+        return torch.bfloat16
+    if get_device_type(device) == "cuda":
+        return torch.float16
+    return torch.float32
+
+
+def empty_cache(device=None):
+    """Release cached memory on the active backend (xpu/cuda) or GC on CPU."""
+    if get_device_type(device) == "xpu":
+        torch.xpu.empty_cache()
+    elif get_device_type(device) == "cuda":
+        torch.cuda.empty_cache()
+    else:
+        gc.collect()
 
 
 def tensor2pil(image: torch.Tensor) -> Image.Image:
