@@ -181,6 +181,10 @@ class RMBGModel(BaseModelLoader):
                         "from .BiRefNet_config import BiRefNetConfig",
                         "from BiRefNetConfig import BiRefNetConfig"
                     )
+                    birefnet_content = birefnet_content.replace(
+                        "attn = attn.view(B_ // nW, nW, self.num_heads, N, N) + mask.unsqueeze(1).unsqueeze(0)",
+                        "attn = attn.view(B_ // nW, nW, self.num_heads, N, N) + mask.to(attn.dtype).unsqueeze(1).unsqueeze(0)"
+                    )
 
                     module_name = f"custom_birefnet_model_{hash(birefnet_path)}"
                     module = types.ModuleType(module_name)
@@ -234,6 +238,9 @@ class RMBGModel(BaseModelLoader):
             for param in self.model.parameters():
                 param.requires_grad = False
 
+            if hasattr(device, "type") and device.type == "cuda":
+                self.model.half()
+
             torch.set_float32_matmul_precision('high')
             self.model.to(device)
             self.current_model_version = model_name
@@ -246,18 +253,18 @@ class RMBGModel(BaseModelLoader):
 
             def extract_results(outputs):
                 if isinstance(outputs, list) and len(outputs) > 0:
-                    return outputs[-1].sigmoid().cpu()
+                    return outputs[-1].float().sigmoid().cpu()
                 if isinstance(outputs, dict) and 'logits' in outputs:
-                    return outputs['logits'].sigmoid().cpu()
+                    return outputs['logits'].float().sigmoid().cpu()
                 if isinstance(outputs, torch.Tensor):
-                    return outputs.sigmoid().cpu()
+                    return outputs.float().sigmoid().cpu()
 
                 try:
                     if hasattr(outputs, 'last_hidden_state'):
-                        return outputs.last_hidden_state.sigmoid().cpu()
+                        return outputs.last_hidden_state.float().sigmoid().cpu()
                     for _, value in outputs.items():
                         if isinstance(value, torch.Tensor):
-                            return value.sigmoid().cpu()
+                            return value.float().sigmoid().cpu()
                 except Exception:
                     pass
 
@@ -278,8 +285,10 @@ class RMBGModel(BaseModelLoader):
 
             original_sizes = [tensor2pil(img).size for img in images]
 
-            input_tensors = [transform_image(tensor2pil(img)).unsqueeze(0) for img in images]
+            input_tensors = [transform_image(tensor2pil(img).convert("RGB")).unsqueeze(0) for img in images]
             input_batch = torch.cat(input_tensors, dim=0).to(device)
+            if hasattr(device, "type") and device.type == "cuda":
+                input_batch = input_batch.half()
 
             with torch.no_grad():
                 try:
@@ -305,7 +314,9 @@ class RMBGModel(BaseModelLoader):
                     print("[RMBG INFO] Batch inference failed due to tensor size mismatch; retrying images one by one.")
                     masks = []
                     for img, (orig_w, orig_h) in zip(images, original_sizes):
-                        single_input = transform_image(tensor2pil(img)).unsqueeze(0).to(device)
+                        single_input = transform_image(tensor2pil(img).convert("RGB")).unsqueeze(0).to(device)
+                        if hasattr(device, "type") and device.type == "cuda":
+                            single_input = single_input.half()
                         single_results = extract_results(self.model(single_input))
                         result = single_results[0].squeeze()
                         result = result * (1 + (1 - params["sensitivity"]))
@@ -635,7 +646,7 @@ class RMBG:
                 if params.get("refine_foreground", False):
                     refined_fg_local = refine_foreground(img_tensor_local, mask_tensor_b1hw)
                     refined_fg_local = tensor2pil(refined_fg_local[0].permute(1, 2, 0))
-                    r, g, b = refined_fg_local.split()
+                    r, g, b = refined_fg_local.convert("RGB").split()
                     foreground_local = Image.merge('RGBA', (r, g, b, mask_img_local))
                 else:
                     orig_rgba_local = orig_image_local.convert("RGBA")
@@ -673,6 +684,7 @@ class RMBG:
                         masks = [masks]
                     for img_item, mask_item in zip(batch_imgs, masks):
                         _process_pair(img_item, mask_item)
+                    clean_vram()
             else:
                 for img in image:
                     mask = model_instance.process_image(img, model, params)
@@ -695,6 +707,8 @@ class RMBG:
         finally:
             if params.get("unload_model", False):
                 unload_model(model_instance, "model")
+            else:
+                clean_vram()
 
 NODE_CLASS_MAPPINGS = {
     "RMBG": RMBG

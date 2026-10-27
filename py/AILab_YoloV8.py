@@ -7,7 +7,7 @@ from PIL import Image, ImageDraw
 
 import folder_paths
 from AILab_ImageMaskTools import pil2tensor, tensor2pil
-from AILab_utils import clean_vram
+from AILab_utils import clean_vram, ultralytics_device
 
 ULTRALYTICS_DIR = os.path.join(folder_paths.models_dir, "ultralytics")
 YOLO_LEGACY_DIR = os.path.join(folder_paths.models_dir, "yolo")
@@ -164,7 +164,7 @@ class AILab_YoloV8Adv:
         try:
             model_path = self._resolve_model_path(yolo_model)
             model = self._get_model(model_path)
-            device_target = self._resolve_device(device)
+            device_target = ultralytics_device(self._resolve_device(device))
             class_filter = self._parse_classes(classes)
 
             merged_masks: List[torch.Tensor] = []
