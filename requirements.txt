@@ -21,6 +21,15 @@ ftfy
 typing_extensions
 #triton-windows
 
-# FeyNoBg & Finegrain Box Segmenter
+# YOLO nodes (AILab_YoloV8 / AILab_Yolo)
+ultralytics>=8.4.0
+
+# FeyNoBg (nobg) & Finegrain Box Segmenter (refiners)
+# Keep pandas<3 BEFORE nobg: ComfyUI-Manager installs this file line by line, and
+# pandas 3 requires numpy>=2. pandas 2.x works with numpy 1.x and 2.x, so an
+# existing numpy version is never forced to change.
+pandas<3
 nobg>=0.3.1
-refiners>=0.4.0
+# PyPI's latest refiners (0.4.0, 2024-02) predates refiners.solutions.BoxSegmenter;
+# the Finegrain node needs the current git version.
+refiners @ git+https://github.com/finegrain-ai/refiners.git@main
